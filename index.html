@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What's New Feed</title>
+
+<style>
+  /* More reliable than <link> in some cases */
+  @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+
+  :root{
+    --card: #cfcfcf;
+    --text: #000;
+    --line: rgba(0,0,0,0.25);
+    --border: rgba(0,0,0,0.10);
+  }
+
+  html, body{
+    margin:0;
+    padding:0;
+    background: transparent;
+    color: var(--text);
+    font-family: "Silkscreen", monospace !important;
+  }
+
+  /* Force font on everything inside */
+  *, *::before, *::after{
+    font-family: "Silkscreen", monospace !important;
+    box-sizing: border-box;
+  }
+
+  .feed{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  .card{
+    display:block;
+    background: var(--card);
+    border-radius:18px;
+    padding:14px 16px;
+    text-decoration:none;
+    color:inherit;
+    border:1px solid var(--border);
+  }
+
+  .top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:13px;
+    font-weight:700;
+    padding-bottom:8px;
+    border-bottom:2px solid var(--line);
+    margin-bottom:8px;
+  }
+
+  .time{
+    font-size:12px;
+    font-weight:700;
+    opacity: 0.9;
+  }
+
+  .time.live{
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid rgba(0,0,0,0.18);
+    background: rgba(255,255,255,0.20);
+    letter-spacing: 0.6px;
+  }
+
+  .text{
+    font-size:13px;
+    line-height:1.45;
+  }
+</style>
+</head>
+
+<body>
+<div class="feed">
+
+  <!-- Twitch (auto LIVE / Offline) -->
+  <a class="card" href="https://www.twitch.tv/eiaska" target="_blank" rel="noopener">
+    <div class="top">
+      <div>🎮 Twitch</div>
+      <div class="time" id="twitchTime">…</div>
+    </div>
+    <div class="text" id="twitchText">Checking Twitch status…</div>
+  </a>
+
+  <!-- YouTube (manual for now) -->
+  <a class="card" href="https://www.youtube.com/@eIaska" target="_blank" rel="noopener">
+    <div class="top">
+      <div>▶️ YouTube</div>
+      <div class="time">7d</div>
+    </div>
+    <div class="text">Elaska uploaded a new video to YouTube</div>
+  </a>
+
+  <!-- Instagram (manual for now) -->
+  <a class="card" href="https://www.instagram.com/kitsudare/" target="_blank" rel="noopener">
+    <div class="top">
+      <div>📸 Instagram</div>
+      <div class="time">7d</div>
+    </div>
+    <div class="text">Elaska posted on Instagram</div>
+  </a>
+
+  <!-- X (manual for now) -->
+  <a class="card" href="https://x.com/elaska" target="_blank" rel="noopener">
+    <div class="top">
+      <div>𝕏 X</div>
+      <div class="time">7d</div>
+    </div>
+    <div class="text">Elaska posted on X</div>
+  </a>
+
+  <!-- Fansly (manual for now) -->
+  <a class="card" href="https://fansly.com/elaska" target="_blank" rel="noopener">
+    <div class="top">
+      <div>⭐ Fansly</div>
+      <div class="time">22d</div>
+    </div>
+    <div class="text">Elaska posted on Fansly</div>
+  </a>
+
+</div>
+
+<script>
+  async function checkTwitch(){
+    const timeEl = document.getElementById("twitchTime");
+    const textEl = document.getElementById("twitchText");
+
+    try{
+      const res = await fetch("https://decapi.me/twitch/uptime/elaska", { cache: "no-store" });
+      const t = (await res.text()).trim().toLowerCase();
+
+      if(t.includes("offline")){
+        timeEl.classList.remove("live");
+        timeEl.textContent = "Offline";
+        textEl.textContent = "Elaska is currently offline on Twitch";
+      } else {
+        timeEl.classList.add("live");
+        timeEl.textContent = "LIVE";
+        textEl.textContent = "Elaska was live on Twitch streaming Fitness & Health";
+      }
+    } catch(e){
+      timeEl.classList.remove("live");
+      timeEl.textContent = "";
+      textEl.textContent = "Unable to check Twitch status right now";
+    }
+
+    sendHeight();
+  }
+
+  function sendHeight(){
+    parent.postMessage(
+      { type: "feedHeight", height: document.documentElement.scrollHeight },
+      "*"
+    );
+  }
+
+  window.addEventListener("load", () => { checkTwitch(); sendHeight(); });
+  window.addEventListener("resize", sendHeight);
+
+  setInterval(checkTwitch, 60000);
+  setInterval(sendHeight, 1500);
+</script>
+</body>
+</html>
