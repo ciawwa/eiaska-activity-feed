@@ -54,7 +54,7 @@ body {
 .text {
   font-size: 13px;
   line-height: 1.45;
-  color: #fff; /* Optional: main text white for contrast */
+  color: #fff; /* optional: main text white for contrast */
 }
 </style>
 </head>
@@ -64,8 +64,8 @@ body {
 
 <script>
 // --- SETTINGS ---
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJdZ2ZZIRkU-Ukws8BGBs-E543ILEsysG-fzrTZlnTtvt6eoo9Mn4wfcBUaCVzsCIpkM9AjJaF8Lzw/pub?output=csv"; // Google Sheet published as CSV
-const TWITCH_USERNAME = "elaska"; // Twitch username for LIVE check
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJdZ2ZZIRkU-Ukws8BGBs-E543ILEsysG-fzrTZlnTtvt6eoo9Mn4wfcBUaCVzsCIpkM9AjJaF8Lzw/pub?output=csv"; // Google Sheet CSV
+const TWITCH_USERNAME = "elaska"; // Twitch username
 
 // --- FUNCTIONS ---
 
@@ -75,15 +75,16 @@ async function fetchSheetData() {
   const text = await res.text();
   const rows = text.trim().split('\n');
   const headers = rows[0].split(',');
-  const items = rows.slice(1).map(row => {
-    const cols = row.split(',');
+  // map rows into objects and **ignore Twitch rows**
+  const items = rows.slice(1).map(r=>{
+    const cols = r.split(',');
     return {
       platform: cols[0],
       text: cols[1],
       label: cols[2],
       url: cols[3]
     };
-  });
+  }).filter(item => item.platform.toLowerCase() !== "twitch"); // <- ignore Twitch
   return items;
 }
 
@@ -110,7 +111,7 @@ async function renderFeed() {
   const sheetItems = await fetchSheetData();
   const twitchStatus = await checkTwitchStatus();
 
-  // Add Twitch at top
+  // Twitch card always on top
   const twitchItem = {
     platform: "Twitch",
     text: twitchStatus.text,
@@ -120,7 +121,7 @@ async function renderFeed() {
 
   const allItems = [twitchItem, ...sheetItems];
 
-  // Sort newest first (Twitch on top, then newest 'NOW' labels first)
+  // Sort newest activity first: label="NOW" moves to top
   allItems.sort((a, b) => {
     if (a.label === "NOW") return -1;
     if (b.label === "NOW") return 1;
@@ -143,7 +144,7 @@ async function renderFeed() {
   });
 }
 
-// Initial render + refresh every 60 seconds
+// Initial render + refresh every 60s
 renderFeed();
 setInterval(renderFeed, 60000);
 
