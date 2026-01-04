@@ -13,7 +13,6 @@
     --text: #747474;
     --line: #747474;
     --card-border: #747474;
-    --hover-bg: rgba(255,255,255,0.10);
   }
 
   html, body {
@@ -77,6 +76,8 @@
     height: 16px;
     display: inline-block;
     flex: 0 0 auto;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
     color: var(--text);
   }
 
@@ -114,13 +115,13 @@
 <div class="feed" id="feedContainer"></div>
 
 <script>
-  // ✅ Your published CSV link (already provided)
+  // ✅ Published CSV link
   const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSJdZ2ZZIRkU-Ukws8BGBs-E543ILEsysG-fzrTZlnTtvt6eoo9Mn4wfcBUaCVzsCIpkM9AjJaF8Lzw/pub?output=csv';
 
   // ✅ Twitch username to check LIVE status
   const twitchUsername = 'elaska';
 
-  // ---------- Robust CSV parsing (handles commas + quotes) ----------
+  // ---------- Robust CSV parsing ----------
   function parseCSV(text) {
     const lines = text.replace(/\r/g, '').trim().split('\n');
     if (lines.length < 2) return [];
@@ -130,8 +131,6 @@
       rows.push(parseCSVLine(lines[i]));
     }
 
-    // Expect headers: platform,text,label,url,timestamp
-    // We ignore headers and map by position safely
     const items = [];
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
@@ -155,7 +154,6 @@
       const ch = line[i];
 
       if (ch === '"') {
-        // double quote inside quoted string -> escaped quote
         if (inQuotes && line[i + 1] === '"') {
           cur += '"';
           i++;
@@ -191,35 +189,31 @@
     return days + 'd';
   }
 
-  // ---------- Icons (simple monochrome SVG) ----------
+  // ---------- Icons (custom images except Twitch) ----------
   function iconSVG(platform) {
     const p = (platform || '').toLowerCase();
 
-    // Minimal, clean icons (monochrome)
-    if (p === 'twitch') return `
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M5 3h16v11l-4 4h-5l-2 2H8v-2H5V3Z" stroke="currentColor" stroke-width="2" />
-        <path d="M10 7v6M15 7v6" stroke="currentColor" stroke-width="2" />
-      </svg>`;
-    if (p === 'youtube') return `
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M21 12s0-4-1-5-4-1-8-1-7 0-8 1-1 5-1 5 0 4 1 5 4 1 8 1 7 0 8-1 1-5 1-5Z" stroke="currentColor" stroke-width="2"/>
-        <path d="M11 9l5 3-5 3V9Z" fill="currentColor"/>
-      </svg>`;
-    if (p === 'x') return `
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M7 6l10 12M17 6L7 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>`;
-    if (p === 'instagram') return `
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5Z" stroke="currentColor" stroke-width="2"/>
-        <path d="M12 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="2"/>
-        <path d="M17.5 6.5h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-      </svg>`;
-    if (p === 'fansly') return `
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M12 3l2.6 5.6 6.1.7-4.5 4 1.3 6-5.5-3.1-5.5 3.1 1.3-6-4.5-4 6.1-.7L12 3Z" stroke="currentColor" stroke-width="2" />
-      </svg>`;
+    // Twitch stays SVG
+    if (p === 'twitch') {
+      return `
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 3h16v11l-4 4h-5l-2 2H8v-2H5V3Z" stroke="currentColor" stroke-width="2" />
+          <path d="M10 7v6M15 7v6" stroke="currentColor" stroke-width="2" />
+        </svg>`;
+    }
+
+    if (p === 'x') {
+      return `<img class="icon" src="https://i.ibb.co/G3V3tT8Y/twitter-1.png" alt="X" />`;
+    }
+    if (p === 'instagram') {
+      return `<img class="icon" src="https://i.ibb.co/CKNPGXZZ/instagram-1.png" alt="Instagram" />`;
+    }
+    if (p === 'youtube') {
+      return `<img class="icon" src="https://i.ibb.co/hxKsjSCv/youtube-1.png" alt="YouTube" />`;
+    }
+    if (p === 'fansly') {
+      return `<img class="icon" src="https://i.ibb.co/v46szjGX/heart-1.png" alt="Fansly" />`;
+    }
 
     // fallback
     return `
@@ -233,21 +227,29 @@
     try {
       const res = await fetch(`https://decapi.me/twitch/uptime/${encodeURIComponent(twitchUsername)}`, { cache: "no-store" });
       const t = (await res.text()).trim().toLowerCase();
-      // decapi returns "offline" or uptime text (e.g. "1 hour, 2 minutes")
       return !t.includes('offline');
     } catch (e) {
-      // If the check fails, don't lie—just treat as offline for display purposes.
       return false;
     }
   }
 
-  // ---------- Render ----------
+  // ---------- Carrd iframe auto-height ----------
   function postHeight() {
     try {
       parent.postMessage({ type: "feedHeight", height: document.documentElement.scrollHeight }, "*");
     } catch (_) {}
   }
 
+  function escapeHTML(str) {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  // ---------- Render ----------
   function render(items, twitchLive) {
     // Sort newest first by timestamp
     items.sort((a, b) => {
@@ -256,7 +258,7 @@
       return tb - ta;
     });
 
-    // Optional: if twitch is LIVE, put it at the top
+    // If Twitch is LIVE, put Twitch card at top
     if (twitchLive) {
       const idx = items.findIndex(i => (i.platform || '').toLowerCase() === 'twitch');
       if (idx > 0) {
@@ -284,14 +286,14 @@
 
       const timeClass = (isTwitch && twitchLive) ? 'time live' : 'time';
 
-      // ✅ Hide Twitch bottom text entirely (only header row)
+      // ✅ Hide Twitch bottom text entirely
       a.innerHTML = `
         <div class="top">
           <div class="left">
             ${iconSVG(item.platform)}
-            <span class="platform">${item.platform || ''}</span>
+            <span class="platform">${escapeHTML(item.platform || '')}</span>
           </div>
-          <div class="${timeClass}">${timeLabel}</div>
+          <div class="${timeClass}">${escapeHTML(timeLabel)}</div>
         </div>
         ${isTwitch ? '' : `<div class="text">${escapeHTML(item.text || '')}</div>`}
       `;
@@ -300,15 +302,6 @@
     }
 
     postHeight();
-  }
-
-  function escapeHTML(str) {
-    return String(str)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
   }
 
   // ---------- Load loop ----------
