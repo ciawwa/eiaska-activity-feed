@@ -1,141 +1,331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Activity Feed</title>
 
 <style>
-  body {
-    margin: 0;
-    font-family: 'Silkscreen', monospace;
-    background: #CCCCCC;
-    color: #747474;
+  @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+
+  :root{
+    --bg: #CCCCCC;
+    --text: #747474;
+    --line: #747474;
+    --card-border: #747474;
+    --hover-bg: rgba(255,255,255,0.10);
   }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: "Silkscreen", monospace;
+  }
+
   .feed {
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
+
   .card {
     display: block;
-    background: #CCCCCC;
+    background: var(--bg);
     border-radius: 18px;
     padding: 14px 16px;
     text-decoration: none;
     color: inherit;
-    border: 1px solid #747474;
+    border: 1px solid var(--card-border);
+    transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
   }
+
+  .card:hover {
+    background: color-mix(in srgb, var(--bg) 92%, white 8%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  }
+
   .top {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     font-size: 13px;
     font-weight: 400;
     padding-bottom: 8px;
-    border-bottom: 1px solid #747474;
+    border-bottom: 1px solid var(--line);
     margin-bottom: 8px;
   }
+
+  .left {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .platform {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    flex: 0 0 auto;
+    color: var(--text);
+  }
+
   .time {
     font-size: 12px;
     font-weight: 400;
+    white-space: nowrap;
   }
+
+  .time.live {
+    border: 1px solid var(--line);
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.20);
+  }
+
   .text {
     font-size: 13px;
     line-height: 1.45;
   }
+
+  /* Tighter mobile spacing */
+  @media (max-width: 480px) {
+    .feed { gap: 10px; }
+    .card { padding: 11px 12px; border-radius: 16px; }
+    .top { font-size: 12px; padding-bottom: 7px; margin-bottom: 7px; }
+    .time { font-size: 11px; }
+    .text { font-size: 12px; line-height: 1.4; }
+    .icon { width: 15px; height: 15px; }
+  }
 </style>
 </head>
-<body>
 
+<body>
 <div class="feed" id="feedContainer"></div>
 
 <script>
-const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSJdZ2ZZIRkU-Ukws8BGBs-E543ILEsysG-fzrTZlnTtvt6eoo9Mn4wfcBUaCVzsCIpkM9AjJaF8Lzw/pub?output=csv';
+  // ✅ Your published CSV link (already provided)
+  const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSJdZ2ZZIRkU-Ukws8BGBs-E543ILEsysG-fzrTZlnTtvt6eoo9Mn4wfcBUaCVzsCIpkM9AjJaF8Lzw/pub?output=csv';
 
-// robust CSV parser to handle commas in text
-function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',');
-  const items = [];
-  for (let i = 1; i < lines.length; i++) {
-    let row = lines[i];
-    // handle quoted commas
-    let cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-    if (!cols) continue;
-    items.push({
-      platform: cols[0]?.replace(/"/g,'') || '',
-      text: cols[1]?.replace(/"/g,'') || '',
-      label: cols[2]?.replace(/"/g,'') || '',
-      url: cols[3]?.replace(/"/g,'') || '',
-      timestamp: cols[4]?.replace(/"/g,'') || ''
-    });
+  // ✅ Twitch username to check LIVE status
+  const twitchUsername = 'elaska';
+
+  // ---------- Robust CSV parsing (handles commas + quotes) ----------
+  function parseCSV(text) {
+    const lines = text.replace(/\r/g, '').trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+      rows.push(parseCSVLine(lines[i]));
+    }
+
+    // Expect headers: platform,text,label,url,timestamp
+    // We ignore headers and map by position safely
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i];
+      items.push({
+        platform: (cols[0] || '').trim(),
+        text: (cols[1] || '').trim(),
+        label: (cols[2] || '').trim(),
+        url: (cols[3] || '').trim(),
+        timestamp: (cols[4] || '').trim()
+      });
+    }
+    return items.filter(x => x.platform);
   }
-  return items;
-}
 
-// calculate time since timestamp
-function timeSince(dateStr) {
-  if (!dateStr) return 'NOW';
-  const now = new Date();
-  const past = new Date(dateStr);
-  const diff = now - past; // milliseconds
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return 'NOW';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return minutes + 'm';
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours + 'h';
-  const days = Math.floor(hours / 24);
-  return days + 'd';
-}
+  function parseCSVLine(line) {
+    const out = [];
+    let cur = '';
+    let inQuotes = false;
 
-// fetch and render feed
-async function loadFeed() {
-  try {
-    const res = await fetch(sheetUrl);
-    const text = await res.text();
-    let items = parseCSV(text);
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
 
-    // sort newest first based on timestamp
+      if (ch === '"') {
+        // double quote inside quoted string -> escaped quote
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        out.push(cur);
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  // ---------- Time since ----------
+  function timeSince(iso) {
+    if (!iso) return '';
+    const now = new Date();
+    const past = new Date(iso);
+    if (isNaN(past.getTime())) return '';
+
+    const diffMs = now - past;
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return 'NOW';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h';
+    const days = Math.floor(hours / 24);
+    return days + 'd';
+  }
+
+  // ---------- Icons (simple monochrome SVG) ----------
+  function iconSVG(platform) {
+    const p = (platform || '').toLowerCase();
+
+    // Minimal, clean icons (monochrome)
+    if (p === 'twitch') return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 3h16v11l-4 4h-5l-2 2H8v-2H5V3Z" stroke="currentColor" stroke-width="2" />
+        <path d="M10 7v6M15 7v6" stroke="currentColor" stroke-width="2" />
+      </svg>`;
+    if (p === 'youtube') return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M21 12s0-4-1-5-4-1-8-1-7 0-8 1-1 5-1 5 0 4 1 5 4 1 8 1 7 0 8-1 1-5 1-5Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M11 9l5 3-5 3V9Z" fill="currentColor"/>
+      </svg>`;
+    if (p === 'x') return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 6l10 12M17 6L7 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`;
+    if (p === 'instagram') return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M17.5 6.5h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`;
+    if (p === 'fansly') return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3l2.6 5.6 6.1.7-4.5 4 1.3 6-5.5-3.1-5.5 3.1 1.3-6-4.5-4 6.1-.7L12 3Z" stroke="currentColor" stroke-width="2" />
+      </svg>`;
+
+    // fallback
+    return `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"></circle>
+      </svg>`;
+  }
+
+  // ---------- Twitch LIVE check ----------
+  async function fetchTwitchLive() {
+    try {
+      const res = await fetch(`https://decapi.me/twitch/uptime/${encodeURIComponent(twitchUsername)}`, { cache: "no-store" });
+      const t = (await res.text()).trim().toLowerCase();
+      // decapi returns "offline" or uptime text (e.g. "1 hour, 2 minutes")
+      return !t.includes('offline');
+    } catch (e) {
+      // If the check fails, don't lie—just treat as offline for display purposes.
+      return false;
+    }
+  }
+
+  // ---------- Render ----------
+  function postHeight() {
+    try {
+      parent.postMessage({ type: "feedHeight", height: document.documentElement.scrollHeight }, "*");
+    } catch (_) {}
+  }
+
+  function render(items, twitchLive) {
+    // Sort newest first by timestamp
     items.sort((a, b) => {
-      if (a.timestamp && b.timestamp) {
-        return new Date(b.timestamp) - new Date(a.timestamp);
-      } else return 0;
+      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return tb - ta;
     });
+
+    // Optional: if twitch is LIVE, put it at the top
+    if (twitchLive) {
+      const idx = items.findIndex(i => (i.platform || '').toLowerCase() === 'twitch');
+      if (idx > 0) {
+        const twitchItem = items.splice(idx, 1)[0];
+        items.unshift(twitchItem);
+      }
+    }
 
     const container = document.getElementById('feedContainer');
     container.innerHTML = '';
 
-    items.forEach(item => {
-      const card = document.createElement('a');
-      card.href = item.url;
-      card.target = '_blank';
-      card.className = 'card';
+    for (const item of items) {
+      const platformLower = (item.platform || '').toLowerCase();
+      const isTwitch = platformLower === 'twitch';
 
-      // Twitch LIVE check
-      const timeLabel = item.platform.toLowerCase() === 'twitch'
-        ? (item.text.toLowerCase().includes('live') ? 'LIVE' : 'Offline')
-        : timeSince(item.timestamp);
+      const timeLabel = isTwitch
+        ? (twitchLive ? 'LIVE' : 'Offline')
+        : (timeSince(item.timestamp) || item.label || '');
 
-      card.innerHTML = `
+      const a = document.createElement('a');
+      a.className = 'card';
+      a.href = item.url || '#';
+      a.target = '_blank';
+      a.rel = 'noopener';
+
+      const timeClass = (isTwitch && twitchLive) ? 'time live' : 'time';
+
+      // ✅ Hide Twitch bottom text entirely (only header row)
+      a.innerHTML = `
         <div class="top">
-          <div>${item.platform}</div>
-          <div class="time">${timeLabel}</div>
+          <div class="left">
+            ${iconSVG(item.platform)}
+            <span class="platform">${item.platform || ''}</span>
+          </div>
+          <div class="${timeClass}">${timeLabel}</div>
         </div>
-        <div class="text">${item.text}</div>
+        ${isTwitch ? '' : `<div class="text">${escapeHTML(item.text || '')}</div>`}
       `;
-      container.appendChild(card);
-    });
-  } catch(e) {
-    console.error('Error loading feed:', e);
-  }
-}
 
-// initial load
-loadFeed();
-// refresh every 60 seconds
-setInterval(loadFeed, 60000);
+      container.appendChild(a);
+    }
+
+    postHeight();
+  }
+
+  function escapeHTML(str) {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  // ---------- Load loop ----------
+  async function loadFeed() {
+    const [twitchLive, csvText] = await Promise.all([
+      fetchTwitchLive(),
+      fetch(sheetUrl, { cache: "no-store" }).then(r => r.text()).catch(() => '')
+    ]);
+
+    const items = csvText ? parseCSV(csvText) : [];
+    render(items, twitchLive);
+  }
+
+  // initial + refresh
+  loadFeed();
+  setInterval(loadFeed, 60000);
+  window.addEventListener('resize', postHeight);
 </script>
 
 </body>
